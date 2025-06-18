@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { toast } from 'sonner'
 import { ArrowLeft, Copy, Download, Calendar, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
-import { copyTableToClipboard, copyUrlToClipboard } from '@/lib/clipboard'
+import { copyTableToClipboard, copyUrlToClipboard } from '@/lib/copyclipboard'
 
 interface Issue {
   id: string

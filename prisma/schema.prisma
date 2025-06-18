@@ -1,0 +1,74 @@
+datasource db{
+    provider = "postgresql"
+    url=env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Project {
+  id                String   @id @default(cuid())
+  name              String
+  complianceOptions Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  urls              Url[]
+  scans             Scan[]
+}
+
+model Url {
+  id        String   @id @default(cuid())
+  url       String   @unique
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model Scan {
+  id              String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  url             String
+  results         Result[]
+  status          String   @default("pending") // pending, in_progress, completed, failed
+  startedAt       DateTime?
+  completedAt     DateTime?
+  error           String?
+  totalIssues     Int?
+  criticalIssues  Int?
+  seriousIssues   Int?
+  moderateIssues  Int?
+  minorIssues     Int?
+  analysisMethod  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model Result {
+  id          String   @id @default(cuid())
+  scanId      String
+  scan        Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  url         String
+  message     String
+  element     String?
+  severity    String
+  impact      String?
+  help        String?
+  tags        String[]
+  elementPath String?
+  details     Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([scanId])
+}
+
+
+
+

@@ -79,7 +79,7 @@ export function UrlForm() {
       }
 
       const result = await addUrlsForAnalysis(urlList, options)
-
+      console.log(result,"result")
       toast({
         title: "Analysis Complete",
         description: `Completed accessibility scan of ${result.count} URL(s).`,

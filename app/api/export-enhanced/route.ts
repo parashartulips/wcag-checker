@@ -166,125 +166,308 @@ async function generatePDFReport(results: any[], summary: any, includeScreenshot
   let browser = null
   
   try {
-    browser = await chromium.launch({ headless: true })
-    const context = await browser.newContext()
+    // Launch browser with more stable configuration
+    browser = await chromium.launch({ 
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-web-security',
+        '--allow-running-insecure-content',
+        '--disable-features=VizDisplayCompositor',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding'
+      ]
+    })
+    
+    const context = await browser.newContext({
+      viewport: { width: 1200, height: 800 },
+      deviceScaleFactor: 1,
+    })
+    
     const page = await context.newPage()
 
-    // Generate HTML content for PDF
-    const htmlContent = generateReportHTML(results, summary, includeScreenshots, organizeBySeverity)
+    // Generate HTML content for PDF (simplified without complex image embedding)
+    const htmlContent = generateSimplifiedReportHTML(results, summary, includeScreenshots, organizeBySeverity)
     
-    await page.setContent(htmlContent, { waitUntil: "networkidle" })
+    console.log("Setting PDF content...")
     
+    // Set content with proper encoding and wait for load
+    await page.setContent(htmlContent, { 
+      waitUntil: "domcontentloaded",
+      timeout: 15000 
+    })
+    
+    // Wait a bit for any remaining content to render
+    await page.waitForTimeout(1000)
+    
+    console.log("Generating PDF...")
+    
+    // Generate PDF with simplified options
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
+      preferCSSPageSize: false,
+      scale: 0.8,
       margin: {
-        top: "20mm",
-        bottom: "20mm",
+        top: "25mm",
+        bottom: "25mm", 
         left: "15mm",
         right: "15mm",
       },
+      displayHeaderFooter: false, // Disable to avoid issues
     })
+
+    console.log(`PDF generated successfully, size: ${pdfBuffer.length} bytes`)
 
     return new NextResponse(pdfBuffer, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="accessibility-report-${new Date().toISOString().split('T')[0]}.pdf"`,
+        "Content-Length": pdfBuffer.length.toString(),
+        "Cache-Control": "no-cache",
       },
     })
+  } catch (error) {
+    console.error("PDF generation error:", error)
+    return NextResponse.json(
+      { error: `PDF generation failed: ${error instanceof Error ? error.message : 'Unknown error'}` },
+      { status: 500 }
+    )
   } finally {
     if (browser) {
-      await browser.close()
+      try {
+        await browser.close()
+      } catch (closeError) {
+        console.error("Error closing browser:", closeError)
+      }
     }
   }
 }
 
-function generateReportHTML(results: any[], summary: any, includeScreenshots: boolean, organizeBySeverity: boolean): string {
+// Simplified HTML generation without complex image embedding
+function generateSimplifiedReportHTML(results: any[], summary: any, includeScreenshots: boolean, organizeBySeverity: boolean): string {
   const severityLevels = ["critical", "serious", "moderate", "minor"]
   
   let html = `
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Accessibility Report</title>
         <style>
-            body { font-family: Arial, sans-serif; margin: 0; padding: 20px; line-height: 1.6; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .summary { background: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
-            .severity-critical { background-color: #fee2e2; border-left: 4px solid #dc2626; }
-            .severity-serious { background-color: #fed7aa; border-left: 4px solid #ea580c; }
-            .severity-moderate { background-color: #fef3c7; border-left: 4px solid #d97706; }
-            .severity-minor { background-color: #dbeafe; border-left: 4px solid #2563eb; }
-            .issue { margin-bottom: 25px; padding: 20px; border-radius: 8px; page-break-inside: avoid; }
-            .issue-title { font-weight: bold; margin-bottom: 15px; font-size: 1.1em; }
-            .issue-details { font-size: 0.95em; color: #333; margin-bottom: 15px; }
-            .issue-details strong { color: #000; }
-            .element-code { 
-                background: #f8f8f8; 
-                padding: 12px; 
-                border-radius: 6px; 
-                font-family: 'Courier New', monospace; 
-                font-size: 0.85em; 
-                margin: 12px 0; 
-                border: 1px solid #e0e0e0;
-                word-wrap: break-word;
-                white-space: pre-wrap;
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
             }
-            .page-break { page-break-before: always; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-            th { background-color: #f2f2f2; font-weight: bold; }
-            .screenshot-container { 
-                margin: 15px 0; 
+            
+            body { 
+                font-family: 'Arial', sans-serif; 
+                line-height: 1.5; 
+                color: #333;
+                background: white;
+                font-size: 12px;
+            }
+            
+            .header { 
+                text-align: center; 
+                margin-bottom: 30px; 
+                border-bottom: 2px solid #2563eb;
+                padding-bottom: 15px;
+            }
+            
+            .header h1 {
+                color: #1e40af;
+                font-size: 24px;
+                margin-bottom: 5px;
+            }
+            
+            .header p {
+                color: #64748b;
+                font-size: 11px;
+            }
+            
+            .summary { 
+                background: #f8fafc; 
+                padding: 20px; 
+                border-radius: 8px; 
+                margin-bottom: 25px; 
+                border: 1px solid #e2e8f0;
+            }
+            
+            .summary h2 {
+                color: #1e40af;
+                font-size: 16px;
+                margin-bottom: 15px;
+            }
+            
+            .summary-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
+            
+            .summary-item {
+                display: flex;
+                justify-content: space-between;
+                padding: 8px;
+                background: white;
+                border-radius: 4px;
+                border: 1px solid #e2e8f0;
+            }
+            
+            .severity-critical { 
+                background: #fee2e2; 
+                border-left: 4px solid #dc2626; 
+                margin-bottom: 15px;
+                page-break-inside: avoid;
+            }
+            .severity-serious { 
+                background: #fed7aa; 
+                border-left: 4px solid #ea580c; 
+                margin-bottom: 15px;
+                page-break-inside: avoid;
+            }
+            .severity-moderate { 
+                background: #fef3c7; 
+                border-left: 4px solid #d97706; 
+                margin-bottom: 15px;
+                page-break-inside: avoid;
+            }
+            .severity-minor { 
+                background: #dbeafe; 
+                border-left: 4px solid #2563eb; 
+                margin-bottom: 15px;
+                page-break-inside: avoid;
+            }
+            
+            .issue { 
                 padding: 15px; 
-                background: #f0f8ff; 
                 border-radius: 6px; 
-                border: 1px solid #b0d4ff;
+                page-break-inside: avoid;
+                border: 1px solid rgba(0,0,0,0.1);
             }
-            .screenshot-image { 
-                max-width: 100%; 
-                height: auto; 
-                border: 1px solid #ccc; 
+            
+            .issue-title { 
+                font-weight: bold; 
+                margin-bottom: 10px; 
+                font-size: 13px; 
+                color: #1e293b;
+                border-bottom: 1px solid rgba(0,0,0,0.1);
+                padding-bottom: 5px;
+            }
+            
+            .issue-details { 
+                font-size: 11px; 
+                color: #475569; 
+                margin-bottom: 10px; 
+                line-height: 1.4;
+            }
+            
+            .issue-details strong { 
+                color: #1e293b; 
+                display: inline-block;
+                min-width: 80px;
+            }
+            
+            .element-code { 
+                background: #f1f5f9; 
+                padding: 10px; 
                 border-radius: 4px; 
-                margin-top: 10px;
-                display: block;
+                font-family: 'Courier New', monospace; 
+                font-size: 10px; 
+                margin: 10px 0; 
+                border: 1px solid #e2e8f0;
+                word-break: break-all;
+                white-space: pre-wrap;
+                max-height: 100px;
+                overflow: hidden;
             }
+            
+            .page-break { 
+                page-break-before: always; 
+            }
+            
+            h2 { 
+                color: #1e40af;
+                font-size: 16px;
+                margin: 20px 0 15px 0;
+                border-bottom: 2px solid #e2e8f0; 
+                padding-bottom: 5px; 
+            }
+            
             .image-info {
                 background: #fff3cd;
-                border: 1px solid #ffeaa7;
-                padding: 10px;
+                border: 1px solid #f59e0b;
+                padding: 8px;
                 border-radius: 4px;
-                margin: 10px 0;
-                font-size: 0.9em;
+                margin: 8px 0;
+                font-size: 10px;
             }
-            .extracted-image {
-                max-width: 300px;
-                max-height: 200px;
-                border: 1px solid #ddd;
+            
+            .screenshot-info {
+                background: #e0f2fe;
+                border: 1px solid #0ea5e9;
+                padding: 8px;
                 border-radius: 4px;
-                margin: 10px 0;
+                margin: 8px 0;
+                font-size: 10px;
             }
-            h1, h2 { color: #333; }
-            h2 { border-bottom: 2px solid #eee; padding-bottom: 10px; }
+            
+            .report-footer {
+                margin-top: 30px; 
+                padding: 15px; 
+                background: #f8fafc; 
+                border-radius: 6px; 
+                font-size: 10px;
+                border: 1px solid #e2e8f0;
+                text-align: center;
+            }
         </style>
     </head>
     <body>
         <div class="header">
-            <h1>WCAG Accessibility Report</h1>
-            <p>Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+            <h1>🔍 WCAG Accessibility Report</h1>
+            <p>Generated on ${new Date().toLocaleDateString('en-US', { 
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            })} at ${new Date().toLocaleTimeString('en-US')}</p>
         </div>
         
         <div class="summary">
-            <h2>Executive Summary</h2>
-            <table>
-                <tr><td><strong>Total Issues Found</strong></td><td>${summary?.total || 0}</td></tr>
-                <tr><td><strong>URLs Analyzed</strong></td><td>${summary?.urlsAnalyzed || 0}</td></tr>
-                <tr><td><strong>Critical Issues</strong></td><td style="color: #dc2626; font-weight: bold;">${summary?.critical || 0}</td></tr>
-                <tr><td><strong>Serious Issues</strong></td><td style="color: #ea580c; font-weight: bold;">${summary?.serious || 0}</td></tr>
-                <tr><td><strong>Moderate Issues</strong></td><td style="color: #d97706; font-weight: bold;">${summary?.moderate || 0}</td></tr>
-                <tr><td><strong>Minor Issues</strong></td><td style="color: #2563eb; font-weight: bold;">${summary?.minor || 0}</td></tr>
-            </table>
+            <h2>📊 Executive Summary</h2>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <strong>Total Issues:</strong>
+                    <span>${summary?.total || 0}</span>
+                </div>
+                <div class="summary-item">
+                    <strong>URLs Analyzed:</strong>
+                    <span>${summary?.urlsAnalyzed || 1}</span>
+                </div>
+                <div class="summary-item">
+                    <strong>🔴 Critical:</strong>
+                    <span style="color: #dc2626; font-weight: bold;">${summary?.critical || 0}</span>
+                </div>
+                <div class="summary-item">
+                    <strong>🟠 Serious:</strong>
+                    <span style="color: #ea580c; font-weight: bold;">${summary?.serious || 0}</span>
+                </div>
+                <div class="summary-item">
+                    <strong>🟡 Moderate:</strong>
+                    <span style="color: #d97706; font-weight: bold;">${summary?.moderate || 0}</span>
+                </div>
+                <div class="summary-item">
+                    <strong>🔵 Minor:</strong>
+                    <span style="color: #2563eb; font-weight: bold;">${summary?.minor || 0}</span>
+                </div>
+            </div>
         </div>
   `
 
@@ -295,11 +478,10 @@ function generateReportHTML(results: any[], summary: any, includeScreenshots: bo
       if (severityResults.length > 0) {
         html += `
           <div class="page-break">
-            <h2>${severity.charAt(0).toUpperCase() + severity.slice(1)} Issues (${severityResults.length})</h2>
+            <h2>${getSeverityIcon(severity)} ${severity.charAt(0).toUpperCase() + severity.slice(1)} Issues (${severityResults.length})</h2>
         `
         
         severityResults.forEach((result, index) => {
-          // Extract image URL from element if it's an image-related issue
           const imageUrl = extractImageFromElement(result.element)
           const isImageIssue = result.message?.toLowerCase().includes('alt') || 
                               result.message?.toLowerCase().includes('image') ||
@@ -307,48 +489,31 @@ function generateReportHTML(results: any[], summary: any, includeScreenshots: bo
           
           html += `
             <div class="issue severity-${severity}">
-              <div class="issue-title">Issue ${index + 1}: ${result.message || 'N/A'}</div>
+              <div class="issue-title">Issue ${index + 1}: ${escapeHtml(result.message || 'N/A')}</div>
               <div class="issue-details">
-                <strong>URL:</strong> ${result.url || 'N/A'}<br>
-                <strong>Severity Level:</strong> ${result.severity || 'N/A'}<br>
-                <strong>Remediation Guidance:</strong> ${result.help || 'N/A'}<br>
-                <strong>WCAG Compliance:</strong> ${result.tags?.join(", ") || "N/A"}<br>
-                <strong>Detection Date:</strong> ${result.createdAt ? new Date(result.createdAt).toLocaleDateString() : 'N/A'}<br>
-                ${(result as any).elementPath ? `<strong>Element Path:</strong> ${(result as any).elementPath}<br>` : ''}
-                ${result.helpUrl ? `<strong>Learn More:</strong> <a href="${result.helpUrl}" target="_blank">${result.helpUrl}</a><br>` : ''}
+                <strong>🌐 URL:</strong> ${escapeHtml(result.url || 'N/A')}<br>
+                <strong>⚠️ Severity:</strong> ${escapeHtml(result.severity || 'N/A')}<br>
+                <strong>💡 Help:</strong> ${escapeHtml(result.help || 'N/A')}<br>
+                                 <strong>📋 Tags:</strong> ${result.tags?.map((tag: string) => escapeHtml(tag)).join(", ") || "N/A"}<br>
+                <strong>📅 Date:</strong> ${result.createdAt ? new Date(result.createdAt).toLocaleDateString('en-US') : 'N/A'}
               </div>
               
               ${isImageIssue && imageUrl ? `
                 <div class="image-info">
-                  <strong>🖼️ Image Found in Element:</strong><br>
-                  <img src="${imageUrl}" alt="Element image" class="extracted-image" 
-                       onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                  <div style="display: none; padding: 10px; background: #f8f8f8; border-radius: 4px; margin-top: 5px;">
-                    <strong>Image URL:</strong> ${imageUrl}<br>
-                    <em>Note: Image may not display if URL is inaccessible or requires authentication.</em>
-                  </div>
+                  <strong>🖼️ Image Found:</strong> ${escapeHtml(imageUrl)}
+                  <br><em>Use the web application to view this image and capture screenshots.</em>
                 </div>
               ` : ''}
               
               <div class="element-code">
-                <strong>HTML Element:</strong><br>
-                ${escapeHtml(result.element || 'N/A')}
+                <strong>📝 HTML Element:</strong><br>
+                ${escapeHtml((result.element || 'N/A').substring(0, 500))}${result.element && result.element.length > 500 ? '...' : ''}
               </div>
               
               ${includeScreenshots ? `
-                <div class="screenshot-container">
-                  <strong>📸 Screenshot Capture:</strong><br>
-                  <em>To capture a screenshot of this specific element:</em>
-                  <ol style="margin: 10px 0; padding-left: 20px;">
-                    <li>Open the WCAG Checker application</li>
-                    <li>Navigate to the Results table</li>
-                    <li>Find this issue and click "View Issue" button</li>
-                    <li>The system will capture a screenshot of the problematic element</li>
-                  </ol>
-                  <p style="font-size: 0.9em; color: #666; margin-top: 10px;">
-                    <strong>Note:</strong> Screenshots are captured dynamically and are not embedded in this PDF report. 
-                    Use the web application for visual inspection of accessibility issues.
-                  </p>
+                <div class="screenshot-info">
+                  <strong>📸 Screenshot:</strong> Available in web application
+                  <br><em>Open the WCAG Checker app and click "View Issue" to capture element screenshots.</em>
                 </div>
               ` : ''}
             </div>
@@ -359,7 +524,7 @@ function generateReportHTML(results: any[], summary: any, includeScreenshots: bo
       }
     }
   } else {
-    html += `<h2>All Issues (${results.length})</h2>`
+    html += `<h2>📋 All Issues (${results.length})</h2>`
     
     results.forEach((result, index) => {
       const imageUrl = extractImageFromElement(result.element)
@@ -369,29 +534,24 @@ function generateReportHTML(results: any[], summary: any, includeScreenshots: bo
       
       html += `
         <div class="issue severity-${result.severity}">
-          <div class="issue-title">Issue ${index + 1}: ${result.message}</div>
+          <div class="issue-title">Issue ${index + 1}: ${escapeHtml(result.message)}</div>
           <div class="issue-details">
-            <strong>URL:</strong> ${result.url}<br>
-            <strong>Severity:</strong> ${result.severity}<br>
-            <strong>Help:</strong> ${result.help}<br>
-            <strong>Compliance:</strong> ${result.tags?.join(", ") || "N/A"}<br>
-            <strong>Date:</strong> ${new Date(result.createdAt).toLocaleDateString()}
+            <strong>🌐 URL:</strong> ${escapeHtml(result.url)}<br>
+            <strong>⚠️ Severity:</strong> ${escapeHtml(result.severity)}<br>
+            <strong>💡 Help:</strong> ${escapeHtml(result.help)}<br>
+            <strong>📋 Tags:</strong> ${result.tags?.map((tag: string) => escapeHtml(tag)).join(", ") || "N/A"}<br>
+            <strong>📅 Date:</strong> ${new Date(result.createdAt).toLocaleDateString('en-US')}
           </div>
           
           ${isImageIssue && imageUrl ? `
             <div class="image-info">
-              <strong>🖼️ Image Found:</strong><br>
-              <img src="${imageUrl}" alt="Element image" class="extracted-image" 
-                   onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-              <div style="display: none; padding: 10px; background: #f8f8f8; border-radius: 4px; margin-top: 5px;">
-                <strong>Image URL:</strong> ${imageUrl}
-              </div>
+              <strong>🖼️ Image Found:</strong> ${escapeHtml(imageUrl)}
             </div>
           ` : ''}
           
           <div class="element-code">
-            <strong>Element:</strong><br>
-            ${escapeHtml(result.element)}
+            <strong>📝 Element:</strong><br>
+            ${escapeHtml((result.element || 'N/A').substring(0, 500))}${result.element && result.element.length > 500 ? '...' : ''}
           </div>
         </div>
       `
@@ -399,18 +559,34 @@ function generateReportHTML(results: any[], summary: any, includeScreenshots: bo
   }
 
   html += `
-        <div style="margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 8px; font-size: 0.9em;">
-          <h3>Report Information</h3>
-          <p><strong>Generated by:</strong> WCAG Accessibility Checker</p>
-          <p><strong>Report Type:</strong> ${organizeBySeverity ? 'Organized by Severity' : 'Complete Issues List'}</p>
-          <p><strong>Screenshots:</strong> ${includeScreenshots ? 'Enabled (use web application to view)' : 'Disabled'}</p>
-          <p><strong>Standards:</strong> WCAG 2.0/2.1 Guidelines, Section 508, Best Practices</p>
+        <div class="report-footer">
+          <h3>📋 Report Information</h3>
+          <p><strong>Generated by:</strong> WCAG Accessibility Checker v2.0</p>
+          <p><strong>Report Type:</strong> ${organizeBySeverity ? 'Organized by Severity Level' : 'Complete Issues List'}</p>
+          <p><strong>Screenshots:</strong> ${includeScreenshots ? 'Use web application for interactive screenshots' : 'Text-based Report'}</p>
+          <p><strong>Standards:</strong> WCAG 2.0/2.1/2.2 Guidelines, Section 508, Best Practices</p>
+          <br>
+          <p style="font-size: 9px; color: #666;">
+            This report was generated automatically. For interactive features, visual screenshots, and detailed analysis, 
+            please use the WCAG Accessibility Checker web application.
+          </p>
         </div>
     </body>
     </html>
   `
 
   return html
+}
+
+// Helper function to get severity icon
+function getSeverityIcon(severity: string): string {
+  const icons = {
+    critical: '🔴',
+    serious: '🟠', 
+    moderate: '🟡',
+    minor: '🔵'
+  }
+  return icons[severity as keyof typeof icons] || '⚪'
 }
 
 // Helper function to extract image URL from HTML element

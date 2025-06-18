@@ -23,12 +23,13 @@ export interface AccessibilitySummary {
 }
 
 export interface ResultsQueryParams {
+  urls: string[]
   page: number
   pageSize: number
   sortBy: string
   search?: string
   severityFilters?: string[]
-  complianceFilters?: string[]
+  complianceFilters?: string[]  
 }
 
 export interface ComplianceOptions {
